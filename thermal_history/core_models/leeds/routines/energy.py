@@ -1,15 +1,20 @@
-#Core model functions
+# Core model functions
 from thermal_history.utils.optimised_funcs import trapezoid
 
 import numpy as np
-from scipy.integrate import trapz,cumtrapz
 
-Na = 6.022140857e23  #Avogadros Constant
+# from scipy.integrate import trapz,cumtrapz
+from scipy.integrate import trapezoid as trapz
+from scipy.integrate import cumulative_trapezoid as cumtrapz
+
+Na = 6.022140857e23  # Avogadros Constant
+
+
 ###############################################################################
-#Latent Heat
+# Latent Heat
 ###############################################################################
-def latent_heat(ri,rho,Ta,Cr,L,idx):
-    '''Latent heat of fusion during IC growth
+def latent_heat(ri, rho, Ta, Cr, L, idx):
+    """Latent heat of fusion during IC growth
 
     Parameters
     ----------
@@ -30,22 +35,20 @@ def latent_heat(ri,rho,Ta,Cr,L,idx):
     -------
     (float, float)
         Normlised latent heat and associated entropy.
-    '''
+    """
 
+    Ql_tilda = 4 * np.pi * ri**2 * rho[idx] * L[idx] * Cr
 
-    Ql_tilda = 4*np.pi*ri**2*rho[idx]*L[idx]*Cr
-
-
-    El_tilda = Ql_tilda*(Ta[idx]-Ta[-1])/(Ta[idx]*Ta[-1])
-
+    El_tilda = Ql_tilda * (Ta[idx] - Ta[-1]) / (Ta[idx] * Ta[-1])
 
     return Ql_tilda, El_tilda
 
+
 ###############################################################################
-#Gravitational Energy
+# Gravitational Energy
 ###############################################################################
 def gravitational(r, Ta, rho, psi, Cr, Cc, M_oc, alpha_c, idx, rs_idx, Tcmb=False):
-    '''Gravitational energy associated with growth of IC
+    """Gravitational energy associated with growth of IC
 
     Parameters
     ----------
@@ -58,7 +61,7 @@ def gravitational(r, Ta, rho, psi, Cr, Cc, M_oc, alpha_c, idx, rs_idx, Tcmb=Fals
     psi : array
         gravitational potential
     Cr : float
-        Cr factor that normalises IC growth rate to cooling rate 
+        Cr factor that normalises IC growth rate to cooling rate
     Cc : array
         Cc factor that normalises enrichment of light element in OC to inner core growth
     M_oc : float
@@ -76,24 +79,25 @@ def gravitational(r, Ta, rho, psi, Cr, Cc, M_oc, alpha_c, idx, rs_idx, Tcmb=Fals
     -------
     (float, float)
         Normlised gravitational energy and associated entropy
-    '''
+    """
 
-    I = 4*np.pi*trapezoid(r[idx:rs_idx+1],rho[idx:rs_idx+1]*psi[idx:rs_idx+1]*r[idx:rs_idx+1]**2)[-1] - M_oc*psi[idx]
+    I = 4 * np.pi * trapezoid(r[idx : rs_idx + 1], rho[idx : rs_idx + 1] * psi[idx : rs_idx + 1] * r[idx : rs_idx + 1] ** 2)[-1] - M_oc * psi[idx]
 
-    Qg_tilda = I*np.sum(alpha_c*Cc)*Cr
+    Qg_tilda = I * np.sum(alpha_c * Cc) * Cr
 
     if Tcmb == False:
-        Eg_tilda = Qg_tilda/Ta[-1]
+        Eg_tilda = Qg_tilda / Ta[-1]
     else:
-        Eg_tilda = Qg_tilda/Tcmb
+        Eg_tilda = Qg_tilda / Tcmb
 
     return Qg_tilda, Eg_tilda
 
+
 ###############################################################################
-#Gravitational Energy for Magnesium precipitation from Du et al. 2017
+# Gravitational Energy for Magnesium precipitation from Du et al. 2017
 ###############################################################################
 def gravitational_precip(r, Ta, rho, psi, idx, Cm, alpha_c):
-    '''Gravitational energy associated with precipitation
+    """Gravitational energy associated with precipitation
 
     Parameters
     ----------
@@ -116,21 +120,22 @@ def gravitational_precip(r, Ta, rho, psi, idx, Cm, alpha_c):
     -------
     (float, float)
         Normlised gravitational energy and associated entropy
-    '''
+    """
 
-    I = 4*np.pi*trapezoid(r[idx:],rho[idx:]*psi[idx:]*r[idx:]**2)[-1]# - M_oc*psi[idx] assuming no uneven partitioning of MgO
+    I = 4 * np.pi * trapezoid(r[idx:], rho[idx:] * psi[idx:] * r[idx:] ** 2)[-1]  # - M_oc*psi[idx] assuming no uneven partitioning of MgO
 
-    Qg_tilda = I*alpha_c*Cm
+    Qg_tilda = I * alpha_c * Cm
 
-    Eg_tilda = Qg_tilda/Ta[-1]
+    Eg_tilda = Qg_tilda / Ta[-1]
 
     return Qg_tilda, Eg_tilda
 
+
 ###############################################################################
-#Secular cooling
+# Secular cooling
 ###############################################################################
-def secular_cool(r,rho,Ta,cp,idx, Tcmb=False):
-    '''Energy from change in sensible energy from secular cooling
+def secular_cool(r, rho, Ta, cp, idx, Tcmb=False):
+    """Energy from change in sensible energy from secular cooling
 
     Parameters
     ----------
@@ -151,28 +156,30 @@ def secular_cool(r,rho,Ta,cp,idx, Tcmb=False):
     -------
     (float, float)
         Secular cooling energy and associated entropy
-    '''
+    """
 
-    #Values are normalised to the cooling rate.
+    # Values are normalised to the cooling rate.
     Tcen = Ta[0]
 
     if Tcmb == False:
         Tcmb = Ta[-1]
 
-    I1 = 4*np.pi*trapezoid(r[:idx+1],rho[:idx+1]*cp[:idx+1]*Ta[:idx+1]*r[:idx+1]**2)[-1]
+    I1 = 4 * np.pi * trapezoid(r[: idx + 1], rho[: idx + 1] * cp[: idx + 1] * Ta[: idx + 1] * r[: idx + 1] ** 2)[-1]
 
-    Qs = -I1/Tcen
+    Qs = -I1 / Tcen
 
-    I2 = 4*np.pi*trapezoid(r[:idx+1], (Ta[:idx+1]/Tcmb - 1) * rho[:idx+1]*cp[:idx+1]*r[:idx+1]**2)[-1]
+    I2 = 4 * np.pi * trapezoid(r[: idx + 1], (Ta[: idx + 1] / Tcmb - 1) * rho[: idx + 1] * cp[: idx + 1] * r[: idx + 1] ** 2)[-1]
 
-    Es = -I2/Tcen
+    Es = -I2 / Tcen
 
     return Qs, Es
+
+
 ###############################################################################
-#Radiogenic heating
+# Radiogenic heating
 ###############################################################################
-def radiogenic_heating(time,r,rho,Ta,Mass,h0,decay_time):
-    '''Heat from radiogenic heating (NOT TESTED)
+def radiogenic_heating(time, r, rho, Ta, Mass, h0, decay_time):
+    """Heat from radiogenic heating (NOT TESTED)
 
     Parameters
     ----------
@@ -195,19 +202,21 @@ def radiogenic_heating(time,r,rho,Ta,Mass,h0,decay_time):
     -------
     (float, float)
         Radiogenic heating and associated entropy
-    '''
-    
-    h = h0 * 2**(-time/decay_time)
-    Qr = Mass*h
+    """
 
-    Er = 4*np.pi*trapezoid(r,h*rho*((1/Ta[-1])-(1/Ta))*r**2)[-1]
+    h = h0 * 2 ** (-time / decay_time)
+    Qr = Mass * h
+
+    Er = 4 * np.pi * trapezoid(r, h * rho * ((1 / Ta[-1]) - (1 / Ta)) * r**2)[-1]
 
     return Qr, Er
+
+
 ###############################################################################
-#Entropy of conduction
+# Entropy of conduction
 ###############################################################################
-def cond_entropy(Ta,Ta_grad,k,r,idx):
-    '''Entropy of thermal conduction in adiabatic region
+def cond_entropy(Ta, Ta_grad, k, r, idx):
+    """Entropy of thermal conduction in adiabatic region
 
     Parameters
     ----------
@@ -226,16 +235,18 @@ def cond_entropy(Ta,Ta_grad,k,r,idx):
     -------
     float
         Entropy of thermal conduction
-    '''
+    """
 
-    Ek = 4*np.pi*trapezoid(r[:idx+1],k[:idx+1]*(Ta_grad[:idx+1]/Ta[:idx+1])**2*r[:idx+1]**2)[-1]
-    #pdb.set_trace()
+    Ek = 4 * np.pi * trapezoid(r[: idx + 1], k[: idx + 1] * (Ta_grad[: idx + 1] / Ta[: idx + 1]) ** 2 * r[: idx + 1] ** 2)[-1]
+    # pdb.set_trace()
     return Ek
+
+
 ###############################################################################
-#Entropy of mixing
+# Entropy of mixing
 ###############################################################################
-def heat_of_reaction(rho_oc,dmu_dt_poly,Cc,Cr,r_oc,mm):
-    '''Entropy of heat of reaction at ICB (NOT TESTED IN A WHILE)
+def heat_of_reaction(rho_oc, dmu_dt_poly, Cc, Cr, r_oc, mm):
+    """Entropy of heat of reaction at ICB (NOT TESTED IN A WHILE)
 
     Parameters
     ----------
@@ -246,7 +257,7 @@ def heat_of_reaction(rho_oc,dmu_dt_poly,Cc,Cr,r_oc,mm):
     Cc : array
         Cc factor that normalises enrichment of light element in OC to inner core growth
     Cr : float
-        Cr factor that normalises IC growth rate to cooling rate 
+        Cr factor that normalises IC growth rate to cooling rate
     r_oc : array
         outer core radial grid points
     mm : array
@@ -256,21 +267,21 @@ def heat_of_reaction(rho_oc,dmu_dt_poly,Cc,Cr,r_oc,mm):
     -------
     float
         Entropy from heat of reaction
-    '''
+    """
 
     Eh_tilda = 0
     for i in range(Cc.size):
-
-        dmu_dt = np.polyval(dmu_dt_poly[i][::-1],r_oc)*Na*1000/mm[i+1]
-        Eh_tilda += -4*np.pi*trapezoid(r_oc,dmu_dt*rho_oc*r_oc**2)[-1]*Cc[i]*Cr
+        dmu_dt = np.polyval(dmu_dt_poly[i][::-1], r_oc) * Na * 1000 / mm[i + 1]
+        Eh_tilda += -4 * np.pi * trapezoid(r_oc, dmu_dt * rho_oc * r_oc**2)[-1] * Cc[i] * Cr
 
     return Eh_tilda
 
+
 ###############################################################################
-#Entropy of mass diffusion
+# Entropy of mass diffusion
 ###############################################################################
 def mass_diffusion(r, i, alpha_D, T):
-    '''Entropy from barodiffusion of light elements
+    """Entropy from barodiffusion of light elements
 
     Parameters
     ----------
@@ -287,22 +298,21 @@ def mass_diffusion(r, i, alpha_D, T):
     -------
     float
         Total entropy of barodiffusion of light elements.
-    '''
+    """
 
     if np.max(alpha_D) == 0:
-        E_alpha = 0  #alpha_D = 0 if no light element is present
+        E_alpha = 0  # alpha_D = 0 if no light element is present
     else:
-        E_alpha = 4*np.pi*trapezoid(r,r**2*i**2/(alpha_D*T))[-1]
-
-
+        E_alpha = 4 * np.pi * trapezoid(r, r**2 * i**2 / (alpha_D * T))[-1]
 
     return E_alpha
 
+
 ###############################################################################
-#Mass flux
+# Mass flux
 ###############################################################################
 def mass_flux(rho, alpha_c, alpha_D, D, c_grad, g):
-    '''Mass flux from diffusion down chemical and pressure gradients
+    """Mass flux from diffusion down chemical and pressure gradients
 
     Parameters
     ----------
@@ -323,19 +333,20 @@ def mass_flux(rho, alpha_c, alpha_D, D, c_grad, g):
     -------
     float or array
         mass flux
-    '''
-    i = -rho*D*c_grad + alpha_c*alpha_D*g
+    """
+    i = -rho * D * c_grad + alpha_c * alpha_D * g
     return i
 
+
 ###############################################################################
-#Numerical integration
+# Numerical integration
 ###############################################################################
-def integrate(x,y,cumulative=0):
-    '''
+def integrate(x, y, cumulative=0):
+    """
     Depreciated in favour of thermal_history.utils.optimised_funcs.trapezoid
-    '''
+    """
     if cumulative == 0:
-        A = trapz(y,x)
+        A = trapz(y, x)
     else:
-        A = cumtrapz(y,x,initial=0)
+        A = cumtrapz(y, x, initial=0)
     return A

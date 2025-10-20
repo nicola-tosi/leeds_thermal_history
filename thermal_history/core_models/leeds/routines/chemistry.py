@@ -1,4 +1,4 @@
-#Core chemistry functions
+# Core chemistry functions
 import pdb
 from re import I
 from numba import njit
@@ -11,10 +11,9 @@ from . import rivoldini_eos as riv
 import numpy as np
 from scipy.optimize import bisect
 
-kb = 1.3806485e-23   #Boltzmanns constant
-ev = 1.602e-19        #Electron volt
-Na = 6.022140857e23   #Avogadros Constant
-
+kb = 1.3806485e-23  # Boltzmanns constant
+ev = 1.602e-19  # Electron volt
+Na = 6.022140857e23  # Avogadros Constant
 
 
 def melting_curve(model):
@@ -40,7 +39,7 @@ def melting_curve(model):
     this would be represented as core_melting_params = ['WN', Tl0, 1, Tl1, Tl2]
 
     'RI': Uses a polynomial fit to Rivoldini's EOS model. Polynomial coefficients are for both Pressure and Compositional dependence
-    and are calculated in the included stand-alone script riv_pre_compute_poly.py. 
+    and are calculated in the included stand-alone script riv_pre_compute_poly.py.
 
     Parameters
     ----------
@@ -61,117 +60,123 @@ def melting_curve(model):
 
     prm = model.parameters
     core = model.core
-    P = core.profiles['P']
+    P = core.profiles["P"]
     melting_params = prm.core_melting_params
 
-    #Change in entropy on melting iron
-    core.profiles['dS'] = prof.entropy_melting(core.profiles['P'], prm.entropy_melting_params)
+    # Change in entropy on melting iron
+    core.profiles["dS"] = prof.entropy_melting(core.profiles["P"], prm.entropy_melting_params)
 
-    #Decide on which melting curve parameterisation to use based on 2 letter string at
-    #beginning of melting_params. If no string is given, assume values are for Alfe parameterisation.
-    #Can add more conditional statements to consider more parameterisations in the furture.
+    # Decide on which melting curve parameterisation to use based on 2 letter string at
+    # beginning of melting_params. If no string is given, assume values are for Alfe parameterisation.
+    # Can add more conditional statements to consider more parameterisations in the furture.
 
-    #Alfe 2002 method
-    if melting_params[0] == 'AL' or type(melting_params[0].item()) in (float, int):
-        if melting_params[0]=='AL':
-            params = melting_params[1:].astype('float64') #Don't pass through first string
+    # external
+    if melting_params[0] == "external":
+        # melting T external
+        # Simple partitioning
+        FeX = melting_params[1]
+        core.conc_s = core.conc_l * prm.partition_coeff
+        Tm = FeX.Tm(core.conc_l, 1e-9 * core.profiles["P"])
+        Tm_fe = FeX.TmFe(1e-9 * core.profiles["P"])
+        dTm_dP = 1e-9 * FeX.dTm_dp(core.conc_l, 1e-9 * core.profiles["P"])
+        dTm = Tm - Tm_fe
+
+    # Alfe 2002 method
+    elif melting_params[0] == "AL" or type(melting_params[0].item()) in (float, int):
+        if melting_params[0] == "AL":
+            params = melting_params[1:].astype("float64")  # Don't pass through first string
         else:
             params = melting_params
 
         Tm_fe = iron_melting(P, params)
 
-        #Calculate fractionation of LE
+        # Calculate fractionation of LE
         if prm.use_partition_coeff:
-            #Calc using fixed partition coefficients
+            # Calc using fixed partition coefficients
             core.conc_s = core.conc_l * prm.partition_coeff
         else:
-            #Calc conc_s based on equal chemical potential
-            core.conc_s = LE_frac_dep(P, Tm_fe, core._ri_idx, core.conc_l, prm.mm,
-                                       prm.dmu, prm.lambda_liq, prm.lambda_sol, prm.entropy_melting_params)
+            # Calc conc_s based on equal chemical potential
+            core.conc_s = LE_frac_dep(P, Tm_fe, core._ri_idx, core.conc_l, prm.mm, prm.dmu, prm.lambda_liq, prm.lambda_sol, prm.entropy_melting_params)
 
         core.mf_s = mass_conc2mole_frac(core.conc_s, prm.mm)
 
-
-        #Melting point depression. Assumes constant dTm across the whole core since we use _ri_idx.
-        if core.profiles['dS'][core._ri_idx] == 0:
-            dTm = 0   #No melting point depression if no specified entropy of freezing.
+        # Melting point depression. Assumes constant dTm across the whole core since we use _ri_idx.
+        if core.profiles["dS"][core._ri_idx] == 0:
+            dTm = 0  # No melting point depression if no specified entropy of freezing.
         else:
-            dTm = melt_pt_dep(core.mf_l, core.mf_s, Tm_fe[core._ri_idx], core.profiles['dS'][core._ri_idx])
+            dTm = melt_pt_dep(core.mf_l, core.mf_s, Tm_fe[core._ri_idx], core.profiles["dS"][core._ri_idx])
 
         dTm_dP = iron_melting_gradient(P, params)
 
-    #Simon Glatzel
-    elif melting_params[0] == 'SG':
-
-        #Simple partitioning
+    # Simon Glatzel
+    elif melting_params[0] == "SG":
+        # Simple partitioning
         core.conc_s = core.conc_l * prm.partition_coeff
 
-        params = melting_params[1:].astype('float64') #Don't pass through first string
+        params = melting_params[1:].astype("float64")  # Don't pass through first string
         Tm_fe = simon_glatzel(P, params)
-        dTm   = 0
+        dTm = 0
         dTm_dP = simon_glatzel_gradient(P, params)
 
-    #Williams and Nimmo for iron snow. Needs conc_l in core.profiles.
-    elif melting_params[0] == 'WN':
-
-        #Simple partitioning
+    # Williams and Nimmo for iron snow. Needs conc_l in core.profiles.
+    elif melting_params[0] == "WN":
+        # Simple partitioning
         core.conc_s = core.conc_l * prm.partition_coeff
 
-        params = melting_params[1:].astype('float64') #Don't use first string
+        params = melting_params[1:].astype("float64")  # Don't use first string
         Tl0 = params[0]
 
-        #Set up conc_l profile on first iteration
-        if not 'conc_l' in core.profiles.keys():
-            core.profiles['conc_l'] = np.full(prm.n_profiles, core.initial_conc_l, dtype=float)
+        # Set up conc_l profile on first iteration
+        if not "conc_l" in core.profiles.keys():
+            core.profiles["conc_l"] = np.full(prm.n_profiles, core.initial_conc_l, dtype=float)
 
-        if len(params)>1:
-            Tm_fe = Tl0*(1+core.initial_conc_l)*polyval(params[1:][::-1], P)
-        else: #If Tm has no dependence on P
-            Tm_fe = np.full(P.size, Tl0*(1+core.initial_conc_l))
+        if len(params) > 1:
+            Tm_fe = Tl0 * (1 + core.initial_conc_l) * polyval(params[1:][::-1], P)
+        else:  # If Tm has no dependence on P
+            Tm_fe = np.full(P.size, Tl0 * (1 + core.initial_conc_l))
 
-        dTm   = -Tm_fe*core.profiles['conc_l']/(1+core.initial_conc_l)
+        dTm = -Tm_fe * core.profiles["conc_l"] / (1 + core.initial_conc_l)
 
-        dTm_dP = Tl0*(1+core.initial_conc_l-core.profiles['conc_l'])*iron_melting_gradient(P, params[1:])
+        dTm_dP = Tl0 * (1 + core.initial_conc_l - core.profiles["conc_l"]) * iron_melting_gradient(P, params[1:])
 
+    elif melting_params[0] == "RI":
+        # Melting temperature based on fitting Rivoldini's EOS model to represent
+        # Tm with polynomials in both pressure and composition. Polynomials are pre-computed
+        # using the riv_pre_compute_poly.py script in the routines sub-package. Output coefficients
+        # are saved into optimal_solution.txt and must be included into the parameters file.
 
-    elif melting_params[0] == 'RI':
-        #Melting temperature based on fitting Rivoldini's EOS model to represent
-        #Tm with polynomials in both pressure and composition. Polynomials are pre-computed
-        #using the riv_pre_compute_poly.py script in the routines sub-package. Output coefficients
-        #are saved into optimal_solution.txt and must be included into the parameters file.
-
-        #Simple partitioning
+        # Simple partitioning
         core.conc_s = core.conc_l * prm.partition_coeff
 
-        params = melting_params[1:].astype('float64') #Don't use first string
+        params = melting_params[1:].astype("float64")  # Don't use first string
 
-        #melting points of iron and alloy
+        # melting points of iron and alloy
         Tm_fe = riv_Tm(P, 0, params)
         Tm = riv_Tm(P, core.conc_l[0], params)
-        dTm = Tm-Tm_fe
-        
+        dTm = Tm - Tm_fe
+
         dTm_dP = riv_dTm_dP(P, core.conc_l[0], params)
 
     else:
-
-        raise ValueError(f'Incorrect string denoting which melting parameterisation to use. See this function (core_models.leeds.routines.chemisty.melting_curve) for valid options. Supplied core_melting_params={melting_params}')
+        raise ValueError(f"Incorrect string denoting which melting parameterisation to use. See this function (core_models.leeds.routines.chemisty.melting_curve) for valid options. Supplied core_melting_params={melting_params}")
 
     Tm = Tm_fe + dTm
 
     return Tm_fe, Tm, dTm_dP
 
+
 def riv_Tm(P, S, melting_params):
-    '''
+    """
     Calculate melting temperature given polynomial coefficients (to degree N) for pressure and composition.
 
-    Tm0 = melting_params[0] + melting_params[1]*S + melting_params[2]*S**2 + .... 
+    Tm0 = melting_params[0] + melting_params[1]*S + melting_params[2]*S**2 + ....
     Tm1 = melting_params[N+1] + ...
     TmN = ....
 
     Tm = Tm0 + Tm1*P + ... TmN*P**N
 
-    '''
-    
+    """
+
     N = int(np.sqrt(len(melting_params))) - 1
 
     if not type(P) == np.ndarray:
@@ -179,24 +184,22 @@ def riv_Tm(P, S, melting_params):
 
     Tm = np.zeros(P.size)
     c = 0
-    for i in range(N+1):
-
+    for i in range(N + 1):
         temp = np.zeros(P.size)
 
-        for j in range(0,N+1):
-            temp += np.dot(melting_params[c+j], S**j)
-            
+        for j in range(0, N + 1):
+            temp += np.dot(melting_params[c + j], S**j)
 
-        Tm += temp*P**i
-        c += N+1
+        Tm += temp * P**i
+        c += N + 1
 
     return Tm
 
 
-def riv_dTm_dP(P,S,melting_params):
-    '''
+def riv_dTm_dP(P, S, melting_params):
+    """
     Calculate melting temperature gradient with pressure for given polynomial coefficients (to degree N) for pressure and composition.
-    '''
+    """
 
     N = int(np.sqrt(len(melting_params))) - 1
 
@@ -204,23 +207,23 @@ def riv_dTm_dP(P,S,melting_params):
         P = np.array(P)
 
     dTm_dP = np.zeros(P.size)
-    c = N+1
-    for i in range(1,N+1):
-
+    c = N + 1
+    for i in range(1, N + 1):
         temp = np.zeros(P.size)
 
-        for j in range(0,N+1):
-            temp += np.dot(melting_params[c+j], S**j)
+        for j in range(0, N + 1):
+            temp += np.dot(melting_params[c + j], S**j)
 
-        dTm_dP += i*temp*P**(i-1)
-        c += N+1
+        dTm_dP += i * temp * P ** (i - 1)
+        c += N + 1
 
     return dTm_dP
 
-def riv_dTm_dc(P,S,melting_params):
-    '''
+
+def riv_dTm_dc(P, S, melting_params):
+    """
     Calculate melting temperature gradient with composition for given polynomial coefficients (to degree N) for pressure and composition.
-    '''
+    """
 
     N = int(np.sqrt(len(melting_params))) - 1
 
@@ -229,15 +232,14 @@ def riv_dTm_dc(P,S,melting_params):
 
     dTm_dc = np.zeros(P.size)
     c = 0
-    for i in range(0,N+1):
-
+    for i in range(0, N + 1):
         temp = np.zeros(P.size)
 
-        for j in range(1,N+1):
-            temp += np.dot(j*melting_params[c+j], S**(j-1))
+        for j in range(1, N + 1):
+            temp += np.dot(j * melting_params[c + j], S ** (j - 1))
 
-        dTm_dc += temp*P**i
-        c += N+1
+        dTm_dc += temp * P**i
+        c += N + 1
 
     return dTm_dc
 
@@ -259,8 +261,9 @@ def iron_melting(P, melting_params):
     """
     return polyval(melting_params[::-1], P)
 
+
 def iron_melting_gradient(P, melting_params):
-    '''Melting temperature gradient
+    """Melting temperature gradient
 
     Parameters
     ----------
@@ -273,18 +276,19 @@ def iron_melting_gradient(P, melting_params):
     -------
     float or numpy array (same type as P)
         Melting temperature gradient evaluated at P.
-    '''
+    """
 
     if melting_params.size > 1:
-        poly = np.zeros(melting_params.size-1)
+        poly = np.zeros(melting_params.size - 1)
         for i in range(poly.size):
-            poly[i] = melting_params[i+1] * (i+1)
+            poly[i] = melting_params[i + 1] * (i + 1)
         return polyval(poly[::-1], P)
     else:
-        return P*0
+        return P * 0
+
 
 def simon_glatzel(P, melting_params):
-    '''Melting temperature of iron alloy parameterised with Simon-Glatzel's equation.
+    """Melting temperature of iron alloy parameterised with Simon-Glatzel's equation.
 
     Parameters
     ----------
@@ -297,13 +301,14 @@ def simon_glatzel(P, melting_params):
     -------
     float or numpy array
         The melting temperature at P
-    '''
+    """
 
     T0, beta1, beta2 = melting_params
-    return T0 * (P/(beta1) + 1)**(1/beta2)
+    return T0 * (P / (beta1) + 1) ** (1 / beta2)
+
 
 def simon_glatzel_gradient(P, melting_params):
-    '''Gradient of the melting temperature of iron alloy parameterised with Simon-Glatzel's equation.
+    """Gradient of the melting temperature of iron alloy parameterised with Simon-Glatzel's equation.
 
     Parameters
     ----------
@@ -316,69 +321,72 @@ def simon_glatzel_gradient(P, melting_params):
     -------
     float or numpy array
         The melting temperature gradient at P
-    '''
+    """
     T0, beta1, beta2 = melting_params
-    return (T0/(beta1*beta2)) * (P/(beta1) + 1)**(1/beta2 - 1)
+    return (T0 / (beta1 * beta2)) * (P / (beta1) + 1) ** (1 / beta2 - 1)
+
 
 ###############################################################################
-#Convert mole fraction to mass concentration by equations in Labrosse (2014)
+# Convert mole fraction to mass concentration by equations in Labrosse (2014)
 ###############################################################################
 def mole_frac2mass_conc(mf, mm):
-    '''Converts from mole fraction to mass fraction for core alloying light elements
+    """Converts from mole fraction to mass fraction for core alloying light elements
 
     Parameters
     ----------
     mf : array
         mole fractions of light elements
-    mm : array 
+    mm : array
         molar masses of iron followed by light elements
 
     Returns
     -------
     array
         mass fractions of light elements (same size as mf)
-    '''
+    """
 
     mm = np.array(mm)
 
-    denom = np.dot(mf,mm[1:]) + (1 - np.sum(mf))*mm[0]
+    denom = np.dot(mf, mm[1:]) + (1 - np.sum(mf)) * mm[0]
 
-    conc = np.array(mf)*np.array(mm)[1:]/denom
+    conc = np.array(mf) * np.array(mm)[1:] / denom
 
     return conc
 
+
 ###############################################################################
-#Convert mass concentration to mole fraction by equations in Labrosse (2014)
+# Convert mass concentration to mole fraction by equations in Labrosse (2014)
 ###############################################################################
 def mass_conc2mole_frac(conc, mm):
-    '''Converts from mass fraction to mole fraction for core alloying light elements
+    """Converts from mass fraction to mole fraction for core alloying light elements
 
     Parameters
     ----------
     conc : array
         mass fractions of light elements
-    mm : array 
+    mm : array
         molar masses of iron followed by light elements
 
     Returns
     -------
     array
         mole fractions of light elements (same size as conc)
-    '''
+    """
 
     mm = np.array(mm)
 
-    denom = np.sum(conc/mm[1:]) + (1-np.sum(conc))/mm[0]
+    denom = np.sum(conc / mm[1:]) + (1 - np.sum(conc)) / mm[0]
 
-    mf = np.array(conc)/(np.array(mm)[1:]*denom)
+    mf = np.array(conc) / (np.array(mm)[1:] * denom)
 
     return mf
 
+
 ###############################################################################
-#Calculate the mole fraction of light element species in the solid
+# Calculate the mole fraction of light element species in the solid
 ###############################################################################
 def solid_conc(mf_liq, T_m, ds_fe, dmu, lambda_liq, lambda_sol):
-    '''Calculates the mole fraction of light element in the inner core from chemical equilibria
+    """Calculates the mole fraction of light element in the inner core from chemical equilibria
 
     Parameters
     ----------
@@ -399,13 +407,12 @@ def solid_conc(mf_liq, T_m, ds_fe, dmu, lambda_liq, lambda_sol):
     -------
     array
         mole fractions in the inner core
-    '''
+    """
 
-    def f(guess,dmu_x,lambda_liq_x,lambda_sol_x,mf_liq_x,T_m,ds_fe):
-        return dmu_x + mf_liq_x*lambda_liq_x - guess*lambda_sol_x - kb*T_m*np.log(guess/mf_liq_x)*(1+(guess-mf_liq_x)/(ds_fe/kb))
+    def f(guess, dmu_x, lambda_liq_x, lambda_sol_x, mf_liq_x, T_m, ds_fe):
+        return dmu_x + mf_liq_x * lambda_liq_x - guess * lambda_sol_x - kb * T_m * np.log(guess / mf_liq_x) * (1 + (guess - mf_liq_x) / (ds_fe / kb))
 
-
-    #Bisection method to find chemcical equilibrium
+    # Bisection method to find chemcical equilibrium
     mf_sol = np.zeros(mf_liq.size)
     for i in range(mf_liq.size):
         if mf_liq[i] == 0:
@@ -415,21 +422,20 @@ def solid_conc(mf_liq, T_m, ds_fe, dmu, lambda_liq, lambda_sol):
             upper = 1
 
             try:
-                mf_sol[i] = bisect(f,lower,upper,args=(dmu[i],lambda_liq[i],lambda_sol[i],mf_liq[i],T_m,ds_fe),maxiter=200)
+                mf_sol[i] = bisect(f, lower, upper, args=(dmu[i], lambda_liq[i], lambda_sol[i], mf_liq[i], T_m, ds_fe), maxiter=200)
             except:
                 breakpoint()
-                raise ValueError('Can\'t solve for mole fraction in the solid. Check radial polynomials for melting temperature and entropy of freezing')
-
+                raise ValueError("Can't solve for mole fraction in the solid. Check radial polynomials for melting temperature and entropy of freezing")
 
     return mf_sol
 
 
 ###############################################################################
-#Calculate the melting temperature including the depression due to light elements
-#Equation 12 from Alfe et al.(2002)
+# Calculate the melting temperature including the depression due to light elements
+# Equation 12 from Alfe et al.(2002)
 ###############################################################################
 def melt_pt_dep(mf_liq, mf_sol, Tm, ds_fe):
-    '''Calculates the melting point depression by Alfe et al. (2002)
+    """Calculates the melting point depression by Alfe et al. (2002)
 
     Parameters
     ----------
@@ -446,18 +452,18 @@ def melt_pt_dep(mf_liq, mf_sol, Tm, ds_fe):
     -------
     float or array
         Deflection of melting curve due to presence of light elements
-    '''
+    """
 
-
-    dTm = kb*(Tm/ds_fe)*np.sum(mf_sol-mf_liq)
+    dTm = kb * (Tm / ds_fe) * np.sum(mf_sol - mf_liq)
 
     return dTm
 
+
 ###############################################################################
-#Calculate the melting temperature depression and fractionation of light elements.
+# Calculate the melting temperature depression and fractionation of light elements.
 ###############################################################################
 def LE_frac_dep(P, Tm_fe, ri_idx, conc_l, mm, dmu, lambda_liq, lambda_sol, ent_mel_poly):
-    '''Calculates the concentration of light elements in the solid inner core
+    """Calculates the concentration of light elements in the solid inner core
 
     Parameters
     ----------
@@ -484,10 +490,9 @@ def LE_frac_dep(P, Tm_fe, ri_idx, conc_l, mm, dmu, lambda_liq, lambda_sol, ent_m
     -------
     array
         mass fraction of light element in the solid
-    '''
+    """
 
-
-    #fractionation of light elements
+    # fractionation of light elements
     ds_fe = prof.entropy_melting(P, ent_mel_poly)
     mf_l = mass_conc2mole_frac(conc_l, mm)
     mf_s = solid_conc(mf_l, Tm_fe[ri_idx], ds_fe[ri_idx], dmu, lambda_liq, lambda_sol)
@@ -498,10 +503,10 @@ def LE_frac_dep(P, Tm_fe, ri_idx, conc_l, mm, dmu, lambda_liq, lambda_sol, ent_m
 
 
 ###############################################################################
-#Calculate barodiffusion coefficient as defined in Gubbins et al. (2004)
+# Calculate barodiffusion coefficient as defined in Gubbins et al. (2004)
 ###############################################################################
 def baro_coeff(mf_l, mm, T_av, rho_av, lambda_liq, diffusivity_c):
-    '''Calculates the barodiffusion coefficient
+    """Calculates the barodiffusion coefficient
 
     Parameters
     ----------
@@ -522,16 +527,17 @@ def baro_coeff(mf_l, mm, T_av, rho_av, lambda_liq, diffusivity_c):
     -------
     array
         barodiffusion coefficients for light elements
-    '''
+    """
 
     if not type(mf_l) == np.ndarray:
         mf_l = np.array([mf_l])
 
-    return baro_coeff_fast(np.array(mf_l, dtype='f8'), np.array(mm, dtype='f8'), T_av, rho_av, lambda_liq, diffusivity_c)
+    return baro_coeff_fast(np.array(mf_l, dtype="f8"), np.array(mm, dtype="f8"), T_av, rho_av, lambda_liq, diffusivity_c)
+
 
 @njit
 def baro_coeff_fast(mf_l, mm, T_av, rho_av, lambda_liq, diffusivity_c):
-    '''Faster jit compiled version of baro_coeff
+    """Faster jit compiled version of baro_coeff
 
     Parameters
     ----------
@@ -552,29 +558,28 @@ def baro_coeff_fast(mf_l, mm, T_av, rho_av, lambda_liq, diffusivity_c):
     -------
     array
         barodiffusion coefficients for light elements
-    '''
+    """
 
     # A_av = 0
     # for i in range(mm.size-1):
     #     A_av += np.dot(mf_l, mm[1:]) + (1 - np.sum(mf_l))*mm[0]
 
+    A_av = np.dot(mf_l, mm[1:]) + (1 - np.sum(mf_l)) * mm[0]
 
-    A_av = np.dot(mf_l,mm[1:]) + (1 - np.sum(mf_l))*mm[0]
+    dmu_dmf = kb * T_av / mf_l + lambda_liq
 
-    dmu_dmf = kb*T_av/mf_l + lambda_liq
+    dmu_dc = dmu_dmf * (A_av / mm[1:]) * Na * (1000 / mm[1:])
 
-    dmu_dc  = dmu_dmf * (A_av/mm[1:]) * Na * (1000/mm[1:])
-
-    alpha_D = rho_av*diffusivity_c/dmu_dc
+    alpha_D = rho_av * diffusivity_c / dmu_dc
 
     return alpha_D
 
 
 ###############################################################################
-#Set Ta(r=0) for the specified inner core size from the model_class.state()
+# Set Ta(r=0) for the specified inner core size from the model_class.state()
 ###############################################################################
 def calibrate_temperature(model):
-    '''Calculates the correct value for Tcen for a given inner core radius and melting curve
+    """Calculates the correct value for Tcen for a given inner core radius and melting curve
 
     Sets model.core.T_cmb, as well as the adiabat/adiabatic gradient profiles with correct temperature
     for given inner core radius
@@ -583,24 +588,23 @@ def calibrate_temperature(model):
     ----------
     model : ThermalModel class
         Main ThermalModel class being used for the calculation.
-    '''
-
+    """
 
     prm = model.parameters
     core = model.core
 
-    #Get melting curve
-    Tm = core.profiles['Tm']
-    poly =  prm.core_adiabat_params
+    # Get melting curve
+    Tm = core.profiles["Tm"]
+    poly = prm.core_adiabat_params
 
     Tm_ri = Tm[core._ri_idx]
 
-    #Calculate necessary Tcen for given ri and Tm
-    core.Tcen = Tm_ri/prof.adiabat(core.ri, 1, poly)
+    # Calculate necessary Tcen for given ri and Tm
+    core.Tcen = Tm_ri / prof.adiabat(core.ri, 1, poly)
 
-    #Reset adiabat profiles
-    core.profiles['Ta']     = prof.adiabat(     core.profiles['r'], core.Tcen, poly)
-    core.profiles['dTa_dr'] = prof.adiabat_grad(core.profiles['r'], core.Tcen, poly)
+    # Reset adiabat profiles
+    core.profiles["Ta"] = prof.adiabat(core.profiles["r"], core.Tcen, poly)
+    core.profiles["dTa_dr"] = prof.adiabat_grad(core.profiles["r"], core.Tcen, poly)
 
-    #Reset CMB temperature
-    core.T_cmb = core.profiles['Ta'][-1]
+    # Reset CMB temperature
+    core.T_cmb = core.profiles["Ta"][-1]

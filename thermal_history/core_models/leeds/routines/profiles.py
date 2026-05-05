@@ -662,7 +662,7 @@ def mass(rho_ic_poly, rho_oc_poly, ri, rs, r_cmb):
     return M_ic, M_conv, Ms, M
 
 
-def mass_correct(solid_params, liquid_params, ri, M, r_cmb):
+def mass_correct(solid_params, liquid_params, ri, M, rs, r_cmb):
     """Correct outer core density polynomials to account for changing LE concentration.
 
     Parameters
@@ -684,7 +684,7 @@ def mass_correct(solid_params, liquid_params, ri, M, r_cmb):
         corrected outer core density polynomial coefficients
     """
 
-    M_ic, M_conv, Ms = mass(solid_params, liquid_params, ri, r_cmb, r_cmb)[:3]
+    M_ic, M_conv, Ms = mass(solid_params, liquid_params, ri, rs, r_cmb)[:3]
     M_oc = M_conv + Ms
 
     M_oc_target = M - M_ic

@@ -177,7 +177,7 @@ def evolve(model):
         dTm_dr = (Tm[ri_idx + 1] - Tm[ri_idx]) / (r[ri_idx + 1] - r[ri_idx])  # Forward difference Tm gradient
         dTa_dr = Ta_grad[ri_idx]  # Adiabatic gradient
 
-        dTm_dr = core.profiles["dTm_dP"][ri_idx - 1] * (-rho[ri_idx - 1] * g[ri_idx - 1])
+        # dTm_dr = core.profiles["dTm_dP"][ri_idx - 1] * (-rho[ri_idx - 1] * g[ri_idx - 1]) # Makes the evolution very sensitive to the inner core density profile.
 
         # Change in composition normalised to cooling rate
         Cc = 4 * np.pi * r[ri_idx] ** 2 * rho[ri_idx] * (core.conc_l - core.conc_s) / M_conv
@@ -341,7 +341,7 @@ def evolve(model):
     core.dM += mantle.cmb_mass_flux
 
     if core.ri < prm.r_cmb:
-        o_rho = prof.mass_correct(rho_s, rho_l, core.ri, core.M0 + core.dM, prm.r_cmb)
+        o_rho = prof.mass_correct(rho_s, rho_l, core.ri, core.M0 + core.dM, core.rs, prm.r_cmb)
         core.o_rho_0 = o_rho[0]
     else:
         core.o_rho_0 = rho_l[0]

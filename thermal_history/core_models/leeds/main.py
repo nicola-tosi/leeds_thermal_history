@@ -180,7 +180,7 @@ def evolve(model):
         # dTm_dr = core.profiles["dTm_dP"][ri_idx - 1] * (-rho[ri_idx - 1] * g[ri_idx - 1]) # Makes the evolution very sensitive to the inner core density profile.
 
         # Change in composition normalised to cooling rate
-        Cc = 4 * np.pi * r[ri_idx] ** 2 * rho[ri_idx] * (core.conc_l - core.conc_s) / M_conv
+        Cc = 4 * np.pi * r[ri_idx] ** 2 * rho[ri_idx] * (core.conc_l - core.conc_s) / (M_conv+Ms)
 
         if prm.use_new_Cr:
             # Change in melting temp with mole fraction. Assumes AL melting temperature parameterisation.

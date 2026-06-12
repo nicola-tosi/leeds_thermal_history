@@ -73,9 +73,16 @@ def melting_curve(model):
     # external
     if melting_params[0] == "external":
         # melting T external
-        # Simple partitioning
         FeX = melting_params[1]
-        core.conc_s = core.conc_l * prm.partition_coeff
+
+        ### Partition coefficient
+        if prm.partition_coeff[0] == "external": # Partition coef. is function of the Si concentration, with preferential paritionning of Si in the liquid between 0 and 12.5 wt.% Si.
+            partition_function = prm.partition_coeff[1]
+            partition_coeff = partition_function(core.conc_l)[1]
+            core.conc_s = core.conc_l * partition_coeff
+        else:
+            core.conc_s = core.conc_l * prm.partition_coeff # Fixed partition coefficients
+            
         Tm = FeX.Tm(core.conc_l, 1e-9 * core.profiles["P"])
         Tm_fe = FeX.TmFe(1e-9 * core.profiles["P"])
         dTm_dP = 1e-9 * FeX.dTm_dp(core.conc_l, 1e-9 * core.profiles["P"])
